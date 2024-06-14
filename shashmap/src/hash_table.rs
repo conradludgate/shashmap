@@ -32,6 +32,13 @@ impl<T> ShardedHashTable<T> {
         self.raw_table.get_mut(hash, eq)
     }
 
+    pub fn len(&self) -> usize {
+        self.raw_table.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.raw_table.is_empty()
+    }
+
     /// Inserts an element into the `HashTable` with the given hash value, but
     /// without checking whether an equivalent element already exists within the
     /// table.
@@ -43,7 +50,7 @@ impl<T> ShardedHashTable<T> {
     ///
     /// ```
     /// use shashmap::hash_table::ShardedHashTable;
-    /// use std::hash::{RandomState, BuildHasher, BuildHasherDefault};
+    /// use std::hash::{RandomState, BuildHasher};
     ///
     /// let v = ShardedHashTable::new();
     /// let hasher = RandomState::new();
@@ -79,25 +86,17 @@ impl<T> ShardedHashTable<T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use ahash::AHasher;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table = HashTable::new();
-    /// let hasher = BuildHasherDefault::<AHasher>::default();
+    /// let table = ShardedHashTable::new();
+    /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     /// table.insert_unique(hasher(&1), (1, "a"), |val| hasher(&val.0));
-    /// if let Ok(entry) = table.find_entry(hasher(&1), |val| val.0 == 1) {
+    /// if let Some(entry) = table.find_entry(hasher(&1), |val| val.0 == 1) {
     ///     entry.remove();
     /// }
-    /// assert_eq!(table.find(hasher(&1), |val| val.0 == 1), None);
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
+    /// assert_eq!(table.find(hasher(&1), |val| val.0 == 1).as_deref(), None);
     /// ```
     pub fn find_entry(
         &self,
@@ -131,15 +130,12 @@ impl<T> ShardedHashTable<T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use ahash::AHasher;
-    /// use hashbrown::hash_table::Entry;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::Entry;
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table = HashTable::new();
-    /// let hasher = BuildHasherDefault::<AHasher>::default();
+    /// let table = ShardedHashTable::new();
+    /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     /// table.insert_unique(hasher(&1), (1, "a"), |val| hasher(&val.0));
     /// if let Entry::Occupied(entry) = table.entry(hasher(&1), |val| val.0 == 1, |val| hasher(&val.0))
@@ -149,13 +145,8 @@ impl<T> ShardedHashTable<T> {
     /// if let Entry::Vacant(entry) = table.entry(hasher(&2), |val| val.0 == 2, |val| hasher(&val.0)) {
     ///     entry.insert((2, "b"));
     /// }
-    /// assert_eq!(table.find(hasher(&1), |val| val.0 == 1), None);
-    /// assert_eq!(table.find(hasher(&2), |val| val.0 == 2), Some(&(2, "b")));
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
+    /// assert_eq!(table.find(hasher(&1), |val| val.0 == 1).as_deref(), None);
+    /// assert_eq!(table.find(hasher(&2), |val| val.0 == 2).as_deref(), Some(&(2, "b")));
     /// ```
     pub fn entry(
         &self,
@@ -187,22 +178,19 @@ impl<T> Default for ShardedHashTable<T> {
 
 /// A view into a single entry in a table, which may either be vacant or occupied.
 ///
-/// This `enum` is constructed from the [`entry`] method on [`HashTable`].
+/// This `enum` is constructed from the [`entry`] method on [`ShardedHashTable`].
 ///
-/// [`HashTable`]: struct.HashTable.html
-/// [`entry`]: struct.HashTable.html#method.entry
+/// [`ShardedHashTable`]: struct.ShardedHashTable.html
+/// [`entry`]: struct.ShardedHashTable.html#method.entry
 ///
 /// # Examples
 ///
 /// ```
-/// # #[cfg(feature = "nightly")]
-/// # fn test() {
-/// use ahash::AHasher;
-/// use hashbrown::hash_table::{Entry, HashTable, OccupiedEntry};
-/// use std::hash::{BuildHasher, BuildHasherDefault};
+/// use shashmap::hash_table::{Entry, OccupiedEntry, ShardedHashTable};
+/// use std::hash::{RandomState, BuildHasher};
 ///
-/// let mut table = HashTable::new();
-/// let hasher = BuildHasherDefault::<AHasher>::default();
+/// let table = ShardedHashTable::new();
+/// let hasher = RandomState::new();
 /// let hasher = |val: &_| hasher.hash_one(val);
 /// for x in ["a", "b", "c"] {
 ///     table.insert_unique(hasher(&x), x, hasher);
@@ -211,7 +199,7 @@ impl<T> Default for ShardedHashTable<T> {
 ///
 /// // Existing value (insert)
 /// let entry: Entry<_> = table.entry(hasher(&"a"), |&x| x == "a", hasher);
-/// let _raw_o: OccupiedEntry<_, _> = entry.insert("a");
+/// let _: OccupiedEntry<_> = entry.insert("a");
 /// assert_eq!(table.len(), 3);
 /// // Nonexistent value (insert)
 /// table.entry(hasher(&"d"), |&x| x == "d", hasher).insert("d");
@@ -225,18 +213,13 @@ impl<T> Default for ShardedHashTable<T> {
 ///     .entry(hasher(&"e"), |&x| x == "e", hasher)
 ///     .or_insert("e");
 ///
-/// println!("Our HashTable: {:?}", table);
+/// // println!("Our ShardedHashTable: {:?}", table);
 ///
-/// let mut vec: Vec<_> = table.iter().copied().collect();
-/// // The `Iter` iterator produces items in arbitrary order, so the
-/// // items must be sorted to test them against a sorted array.
-/// vec.sort_unstable();
-/// assert_eq!(vec, ["a", "b", "c", "d", "e"]);
-/// # }
-/// # fn main() {
-/// #     #[cfg(feature = "nightly")]
-/// #     test()
-/// # }
+/// // let mut vec: Vec<_> = table.iter().copied().collect();
+/// // // The `Iter` iterator produces items in arbitrary order, so the
+/// // // items must be sorted to test them against a sorted array.
+/// // vec.sort_unstable();
+/// // assert_eq!(vec, ["a", "b", "c", "d", "e"]);
 /// ```
 pub enum Entry<'a, T> {
     /// An occupied entry.
@@ -244,14 +227,11 @@ pub enum Entry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use ahash::AHasher;
-    /// use hashbrown::hash_table::{Entry, HashTable, OccupiedEntry};
-    /// use std::hash::{BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::{Entry, ShardedHashTable, OccupiedEntry};
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table = HashTable::new();
-    /// let hasher = BuildHasherDefault::<AHasher>::default();
+    /// let table = ShardedHashTable::new();
+    /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     /// for x in ["a", "b"] {
     ///     table.insert_unique(hasher(&x), x, hasher);
@@ -260,12 +240,7 @@ pub enum Entry<'a, T> {
     /// match table.entry(hasher(&"a"), |&x| x == "a", hasher) {
     ///     Entry::Vacant(_) => unreachable!(),
     ///     Entry::Occupied(_) => {}
-    /// }
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
+    /// };
     /// ```
     Occupied(OccupiedEntry<'a, T>),
 
@@ -274,25 +249,17 @@ pub enum Entry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use ahash::AHasher;
-    /// use hashbrown::hash_table::{Entry, HashTable, OccupiedEntry};
-    /// use std::hash::{BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::{Entry, ShardedHashTable, OccupiedEntry};
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table = HashTable::<&str>::new();
-    /// let hasher = BuildHasherDefault::<AHasher>::default();
+    /// let table = ShardedHashTable::<&str>::new();
+    /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     ///
     /// match table.entry(hasher(&"a"), |&x| x == "a", hasher) {
     ///     Entry::Vacant(_) => {}
     ///     Entry::Occupied(_) => unreachable!(),
-    /// }
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
+    /// };
     /// ```
     Vacant(VacantEntry<'a, T>),
 }
@@ -313,14 +280,11 @@ impl<'a, T> Entry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use ahash::AHasher;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<&str> = HashTable::new();
-    /// let hasher = BuildHasherDefault::<AHasher>::default();
+    /// let table: ShardedHashTable<&str> = ShardedHashTable::new();
+    /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     ///
     /// let entry = table
@@ -328,11 +292,6 @@ impl<'a, T> Entry<'a, T> {
     ///     .insert("horseyland");
     ///
     /// assert_eq!(entry.get(), &"horseyland");
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
     /// ```
     pub fn insert(self, value: T) -> OccupiedEntry<'a, T> {
         match self {
@@ -351,14 +310,11 @@ impl<'a, T> Entry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use ahash::AHasher;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<&str> = HashTable::new();
-    /// let hasher = BuildHasherDefault::<AHasher>::default();
+    /// let table: ShardedHashTable<&str> = ShardedHashTable::new();
+    /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     ///
     /// // nonexistent key
@@ -377,11 +333,6 @@ impl<'a, T> Entry<'a, T> {
     ///     .find(hasher(&"poneyland"), |&x| x == "poneyland")
     ///     .is_some());
     /// assert_eq!(table.len(), 1);
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
     /// ```
     pub fn or_insert(self, default: T) -> OccupiedEntry<'a, T> {
         match self {
@@ -397,14 +348,11 @@ impl<'a, T> Entry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use ahash::AHasher;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<String> = HashTable::new();
-    /// let hasher = BuildHasherDefault::<AHasher>::default();
+    /// let table: ShardedHashTable<String> = ShardedHashTable::new();
+    /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     ///
     /// table
@@ -414,11 +362,6 @@ impl<'a, T> Entry<'a, T> {
     /// assert!(table
     ///     .find(hasher(&"poneyland"), |x| x == "poneyland")
     ///     .is_some());
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
     /// ```
     pub fn or_insert_with(self, default: impl FnOnce() -> T) -> OccupiedEntry<'a, T> {
         match self {
@@ -433,14 +376,11 @@ impl<'a, T> Entry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use ahash::AHasher;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<(&str, u32)> = HashTable::new();
-    /// let hasher = BuildHasherDefault::<AHasher>::default();
+    /// let table: ShardedHashTable<(&str, u32)> = ShardedHashTable::new();
+    /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     ///
     /// table
@@ -452,7 +392,7 @@ impl<'a, T> Entry<'a, T> {
     ///     .and_modify(|(_, v)| *v += 1)
     ///     .or_insert(("poneyland", 42));
     /// assert_eq!(
-    ///     table.find(hasher(&"poneyland"), |&(k, _)| k == "poneyland"),
+    ///     table.find(hasher(&"poneyland"), |&(k, _)| k == "poneyland").as_deref(),
     ///     Some(&("poneyland", 42))
     /// );
     ///
@@ -465,14 +405,9 @@ impl<'a, T> Entry<'a, T> {
     ///     .and_modify(|(_, v)| *v += 1)
     ///     .or_insert(("poneyland", 42));
     /// assert_eq!(
-    ///     table.find(hasher(&"poneyland"), |&(k, _)| k == "poneyland"),
+    ///     table.find(hasher(&"poneyland"), |&(k, _)| k == "poneyland").as_deref(),
     ///     Some(&("poneyland", 43))
     /// );
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
     /// ```
     pub fn and_modify(self, f: impl FnOnce(&mut T)) -> Self {
         match self {
@@ -493,12 +428,10 @@ impl<'a, T> Entry<'a, T> {
 /// # Examples
 ///
 /// ```
-/// # #[cfg(feature = "nightly")]
-/// # fn test() {
-/// use shashmap::hash_table::{Entry, HashTable, OccupiedEntry};
-/// use std::hash::{RandomState, BuildHasher, BuildHasherDefault};
+/// use shashmap::hash_table::{Entry, ShardedHashTable, OccupiedEntry};
+/// use std::hash::{RandomState, BuildHasher};
 ///
-/// let mut table = HashTable::new();
+/// let table = ShardedHashTable::new();
 /// let hasher = RandomState::new();
 /// let hasher = |val: &_| hasher.hash_one(val);
 /// for x in ["a", "b", "c"] {
@@ -506,7 +439,7 @@ impl<'a, T> Entry<'a, T> {
 /// }
 /// assert_eq!(table.len(), 3);
 ///
-/// let _entry_o: OccupiedEntry<_, _> = table.find_entry(hasher(&"a"), |&x| x == "a").unwrap();
+/// let _: OccupiedEntry<_> = table.find_entry(hasher(&"a"), |&x| x == "a").unwrap();
 /// assert_eq!(table.len(), 3);
 ///
 /// // Existing key
@@ -526,13 +459,8 @@ impl<'a, T> Entry<'a, T> {
 ///         assert_eq!(view.remove().0, "c");
 ///     }
 /// }
-/// assert_eq!(table.find(hasher(&"c"), |&x| x == "c"), None);
+/// assert_eq!(table.find(hasher(&"c"), |&x| x == "c").as_deref(), None);
 /// assert_eq!(table.len(), 2);
-/// # }
-/// # fn main() {
-/// #     #[cfg(feature = "nightly")]
-/// #     test()
-/// # }
 /// ```
 pub struct OccupiedEntry<'a, T> {
     hash: u64,
@@ -556,20 +484,17 @@ impl<'a, T> OccupiedEntry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use hashbrown::hash_table::Entry;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{RandomState, BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::Entry;
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<&str> = HashTable::new();
+    /// let table: ShardedHashTable<&str> = ShardedHashTable::new();
     /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     /// // The table is empty
-    /// assert!(table.is_empty() && table.capacity() == 0);
+    /// assert!(table.is_empty());
     ///
     /// table.insert_unique(hasher(&"poneyland"), "poneyland", hasher);
-    /// let capacity_before_remove = table.capacity();
     ///
     /// if let Entry::Occupied(o) = table.entry(hasher(&"poneyland"), |&x| x == "poneyland", hasher) {
     ///     assert_eq!(o.remove().0, "poneyland");
@@ -578,15 +503,9 @@ impl<'a, T> OccupiedEntry<'a, T> {
     /// assert!(table
     ///     .find(hasher(&"poneyland"), |&x| x == "poneyland")
     ///     .is_none());
-    /// // Now table hold none elements but capacity is equal to the old one
-    /// assert!(table.len() == 0 && table.capacity() == capacity_before_remove);
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
+    /// // Now table hold no elements
+    /// assert!(table.is_empty());
     /// ```
-    #[cfg_attr(feature = "inline-more", inline)]
     pub fn remove(mut self) -> (T, VacantEntry<'a, T>) {
         let (val, slot) = unsafe { self.table.remove(self.bucket) };
         (
@@ -604,13 +523,11 @@ impl<'a, T> OccupiedEntry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use hashbrown::hash_table::Entry;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{RandomState, BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::Entry;
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<&str> = HashTable::new();
+    /// let table: ShardedHashTable<&str> = ShardedHashTable::new();
     /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     /// table.insert_unique(hasher(&"poneyland"), "poneyland", hasher);
@@ -618,12 +535,7 @@ impl<'a, T> OccupiedEntry<'a, T> {
     /// match table.entry(hasher(&"poneyland"), |&x| x == "poneyland", hasher) {
     ///     Entry::Vacant(_) => panic!(),
     ///     Entry::Occupied(entry) => assert_eq!(entry.get(), &"poneyland"),
-    /// }
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
+    /// };
     /// ```
     #[inline]
     pub fn get(&self) -> &T {
@@ -640,19 +552,17 @@ impl<'a, T> OccupiedEntry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use hashbrown::hash_table::Entry;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{RandomState, BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::Entry;
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<(&str, u32)> = HashTable::new();
+    /// let table: ShardedHashTable<(&str, u32)> = ShardedHashTable::new();
     /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     /// table.insert_unique(hasher(&"poneyland"), ("poneyland", 12), |(k, _)| hasher(&k));
     ///
     /// assert_eq!(
-    ///     table.find(hasher(&"poneyland"), |&(x, _)| x == "poneyland",),
+    ///     table.find(hasher(&"poneyland"), |&(x, _)| x == "poneyland",).as_deref(),
     ///     Some(&("poneyland", 12))
     /// );
     ///
@@ -669,14 +579,9 @@ impl<'a, T> OccupiedEntry<'a, T> {
     /// }
     ///
     /// assert_eq!(
-    ///     table.find(hasher(&"poneyland"), |&(x, _)| x == "poneyland",),
+    ///     table.find(hasher(&"poneyland"), |&(x, _)| x == "poneyland",).as_deref(),
     ///     Some(&("poneyland", 24))
     /// );
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
     /// ```
     #[inline]
     pub fn get_mut(&mut self) -> &mut T {
@@ -693,19 +598,17 @@ impl<'a, T> OccupiedEntry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use hashbrown::hash_table::Entry;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{RandomState, BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::Entry;
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<(&str, u32)> = HashTable::new();
+    /// let table: ShardedHashTable<(&str, u32)> = ShardedHashTable::new();
     /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     /// table.insert_unique(hasher(&"poneyland"), ("poneyland", 12), |(k, _)| hasher(&k));
     ///
     /// assert_eq!(
-    ///     table.find(hasher(&"poneyland"), |&(x, _)| x == "poneyland",),
+    ///     table.find(hasher(&"poneyland"), |&(x, _)| x == "poneyland",).as_deref(),
     ///     Some(&("poneyland", 12))
     /// );
     ///
@@ -721,21 +624,16 @@ impl<'a, T> OccupiedEntry<'a, T> {
     /// value.1 += 10;
     ///
     /// assert_eq!(
-    ///     table.find(hasher(&"poneyland"), |&(x, _)| x == "poneyland",),
+    ///     table.find(hasher(&"poneyland"), |&(x, _)| x == "poneyland",).as_deref(),
     ///     Some(&("poneyland", 22))
     /// );
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
     /// ```
     pub fn into_mut(self) -> &'a mut T {
         unsafe { self.bucket.as_mut() }
     }
 }
 
-/// A view into a vacant entry in a `HashTable`.
+/// A view into a vacant entry in a `ShardedHashTable`.
 /// It is part of the [`Entry`] enum.
 ///
 /// [`Entry`]: enum.Entry.html
@@ -743,16 +641,14 @@ impl<'a, T> OccupiedEntry<'a, T> {
 /// # Examples
 ///
 /// ```
-/// # #[cfg(feature = "nightly")]
-/// # fn test() {
-/// use hashbrown::hash_table::{Entry, HashTable, VacantEntry};
-/// use std::hash::{RandomState, BuildHasher, BuildHasherDefault};
+/// use shashmap::hash_table::{Entry, ShardedHashTable, VacantEntry};
+/// use std::hash::{RandomState, BuildHasher};
 ///
-/// let mut table: HashTable<&str> = HashTable::new();
+/// let table: ShardedHashTable<&str> = ShardedHashTable::new();
 /// let hasher = RandomState::new();
 /// let hasher = |val: &_| hasher.hash_one(val);
 ///
-/// let entry_v: VacantEntry<_, _> = match table.entry(hasher(&"a"), |&x| x == "a", hasher) {
+/// let entry_v: VacantEntry<_> = match table.entry(hasher(&"a"), |&x| x == "a", hasher) {
 ///     Entry::Vacant(view) => view,
 ///     Entry::Occupied(_) => unreachable!(),
 /// };
@@ -767,11 +663,6 @@ impl<'a, T> OccupiedEntry<'a, T> {
 ///     Entry::Occupied(_) => unreachable!(),
 /// }
 /// assert!(table.find(hasher(&"b"), |&x| x == "b").is_some() && table.len() == 2);
-/// # }
-/// # fn main() {
-/// #     #[cfg(feature = "nightly")]
-/// #     test()
-/// # }
 /// ```
 pub struct VacantEntry<'a, T> {
     hash: u64,
@@ -794,13 +685,11 @@ impl<'a, T> VacantEntry<'a, T> {
     /// # Examples
     ///
     /// ```
-    /// # #[cfg(feature = "nightly")]
-    /// # fn test() {
-    /// use hashbrown::hash_table::Entry;
-    /// use hashbrown::HashTable;
-    /// use std::hash::{RandomState, BuildHasher, BuildHasherDefault};
+    /// use shashmap::hash_table::Entry;
+    /// use shashmap::hash_table::ShardedHashTable;
+    /// use std::hash::{RandomState, BuildHasher};
     ///
-    /// let mut table: HashTable<&str> = HashTable::new();
+    /// let table: ShardedHashTable<&str> = ShardedHashTable::new();
     /// let hasher = RandomState::new();
     /// let hasher = |val: &_| hasher.hash_one(val);
     ///
@@ -808,14 +697,9 @@ impl<'a, T> VacantEntry<'a, T> {
     ///     o.insert("poneyland");
     /// }
     /// assert_eq!(
-    ///     table.find(hasher(&"poneyland"), |&x| x == "poneyland"),
+    ///     table.find(hasher(&"poneyland"), |&x| x == "poneyland").as_deref(),
     ///     Some(&"poneyland")
     /// );
-    /// # }
-    /// # fn main() {
-    /// #     #[cfg(feature = "nightly")]
-    /// #     test()
-    /// # }
     /// ```
     #[inline]
     pub fn insert(mut self, value: T) -> OccupiedEntry<'a, T> {

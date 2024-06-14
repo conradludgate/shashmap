@@ -1,0 +1,2 @@
+[workspace]
+members = ["shashmap-core", "shashmap"]

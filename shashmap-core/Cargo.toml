@@ -1,0 +1,9 @@
+[package]
+name = "shashmap-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hashbrown = { version = "0.14", features = ["raw"] }
+crossbeam-utils = "0.8"
+lock_api = "0.4"
